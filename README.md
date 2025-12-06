@@ -1,6 +1,43 @@
+<div align="center">
+
 # Family Fun & Brainpower
 
+[![Docker](https://img.shields.io/badge/Docker-Compose-blue.svg)](https://docs.docker.com/compose/)
+[![GitHub stars](https://img.shields.io/github/stars/jleboube/Family-Fun?style=social)](https://github.com/jleboube/Family-Fun/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/jleboube/Family-Fun?style=social)](https://github.com/jleboube/Family-Fun/network/members)
+[![GitHub issues](https://img.shields.io/github/issues/jleboube/Family-Fun)](https://github.com/jleboube/Family-Fun/issues)
+[![GitHub pull requests](https://img.shields.io/github/issues-pr/jleboube/Family-Fun)](https://github.com/jleboube/Family-Fun/pulls)
+[![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CCBY--NC--SA4.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
+
+[!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/muscl3n3rd)
+
+
 A fun, family-friendly trivia and brain game app powered by AI. Challenge your family members to daily brain games, earn points with time-based scoring, and compete on the leaderboard!
+
+
+[Demo](https://familyfun.coolshit.tech/) • [Screenshots](#screenshots) • [Features](#features) 
+
+
+</div>
+
+## Screenshots
+
+Family Fun Trivia Landing Page
+
+![Alt text](docs/ff-1.png "Family Fun Trivia Landing Page")
+
+![Alt text](docs/ff-2.png "Family Fun Trivia Landing Page")
+
+![Alt text](docs/ff-3.png "Family Fun Trivia Landing Page")
+
+![Alt text](docs/ff-4.png "Family Fun Trivia Landing Page")
+
+![Alt text](docs/ff-5.png "Family Fun Trivia Landing Page")
+
+![Alt text](docs/ff-6.png "Family Fun Trivia Landing Page")
+
+![Alt text](docs/ff-7.png "Family Fun Trivia Landing Page")
+
 
 ## Features
 
