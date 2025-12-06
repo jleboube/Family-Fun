@@ -1,12 +1,23 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { generateTriviaQuestions } from '../../services/geminiService';
 import { Question } from '../../types';
-import { Loader2, CheckCircle2, XCircle } from 'lucide-react';
+import { Loader2, CheckCircle2, XCircle, Zap } from 'lucide-react';
+import { useGameTiming } from '../GameShell';
 
 interface TriviaGameProps {
   onEndGame: (score: number, maxScore: number) => void;
   isActive: boolean;
 }
+
+// Calculate points based on how fast the answer was given
+// Max 10 points per question, minimum 2 points if correct
+const calculateTimeBonus = (secondsToAnswer: number): number => {
+  if (secondsToAnswer <= 3) return 10;      // Lightning fast: full points
+  if (secondsToAnswer <= 5) return 8;       // Very fast
+  if (secondsToAnswer <= 10) return 6;      // Fast
+  if (secondsToAnswer <= 15) return 4;      // Normal
+  return 2;                                  // Slow but correct
+};
 
 const TriviaGame: React.FC<TriviaGameProps> = ({ onEndGame, isActive }) => {
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -15,6 +26,9 @@ const TriviaGame: React.FC<TriviaGameProps> = ({ onEndGame, isActive }) => {
   const [score, setScore] = useState(0);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [showResult, setShowResult] = useState(false);
+  const [lastPoints, setLastPoints] = useState<number | null>(null);
+  const questionStartTime = useRef<number>(Date.now());
+  const { getElapsedTime } = useGameTiming();
 
   useEffect(() => {
     if (isActive && questions.length === 0) {
@@ -27,6 +41,7 @@ const TriviaGame: React.FC<TriviaGameProps> = ({ onEndGame, isActive }) => {
     const data = await generateTriviaQuestions(5);
     setQuestions(data);
     setLoading(false);
+    questionStartTime.current = Date.now(); // Start timing first question
   };
 
   const handleOptionClick = (option: string) => {
@@ -34,8 +49,17 @@ const TriviaGame: React.FC<TriviaGameProps> = ({ onEndGame, isActive }) => {
     setSelectedOption(option);
     setShowResult(true);
 
-    if (option === questions[currentIdx].correctAnswer) {
-      setScore(s => s + 10);
+    const isCorrect = option === questions[currentIdx].correctAnswer;
+    let pointsEarned = 0;
+
+    if (isCorrect) {
+      // Calculate time taken for this question
+      const secondsToAnswer = (Date.now() - questionStartTime.current) / 1000;
+      pointsEarned = calculateTimeBonus(secondsToAnswer);
+      setScore(s => s + pointsEarned);
+      setLastPoints(pointsEarned);
+    } else {
+      setLastPoints(0);
     }
 
     setTimeout(() => {
@@ -46,10 +70,14 @@ const TriviaGame: React.FC<TriviaGameProps> = ({ onEndGame, isActive }) => {
   const handleNext = () => {
     setSelectedOption(null);
     setShowResult(false);
+    setLastPoints(null);
+    questionStartTime.current = Date.now(); // Reset timer for next question
+
     if (currentIdx < questions.length - 1) {
       setCurrentIdx(p => p + 1);
     } else {
-      onEndGame(score + (selectedOption === questions[currentIdx]?.correctAnswer ? 10 : 0), questions.length * 10);
+      // Max score is still 10 per question (5 questions = 50 max)
+      onEndGame(score, questions.length * 10);
     }
   };
 
@@ -112,9 +140,23 @@ const TriviaGame: React.FC<TriviaGameProps> = ({ onEndGame, isActive }) => {
       </div>
 
       {showResult && (
-        <div className="mt-4 p-4 bg-blue-50 text-blue-800 rounded-xl animate-in fade-in slide-in-from-bottom-2">
-          <p className="font-bold mb-1">Did you know?</p>
-          <p className="text-sm opacity-90">{currentQ.explanation}</p>
+        <div className="mt-4 space-y-3">
+          {lastPoints !== null && lastPoints > 0 && (
+            <div className="flex items-center justify-center p-3 bg-green-50 text-green-700 rounded-xl animate-in fade-in">
+              <Zap className="w-5 h-5 mr-2" />
+              <span className="font-bold">+{lastPoints} points!</span>
+              {lastPoints >= 8 && <span className="ml-2 text-sm opacity-75">Speed bonus!</span>}
+            </div>
+          )}
+          {lastPoints === 0 && (
+            <div className="flex items-center justify-center p-3 bg-red-50 text-red-700 rounded-xl animate-in fade-in">
+              <span className="font-bold">No points - wrong answer</span>
+            </div>
+          )}
+          <div className="p-4 bg-blue-50 text-blue-800 rounded-xl animate-in fade-in slide-in-from-bottom-2">
+            <p className="font-bold mb-1">Did you know?</p>
+            <p className="text-sm opacity-90">{currentQ.explanation}</p>
+          </div>
         </div>
       )}
     </div>

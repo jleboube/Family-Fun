@@ -1,18 +1,33 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { generateLogicPuzzle } from '../../services/geminiService';
 import { LogicPuzzle } from '../../types';
-import { Loader2, BrainCircuit } from 'lucide-react';
+import { Loader2, BrainCircuit, Zap } from 'lucide-react';
+import { useGameTiming } from '../GameShell';
 
 interface LogicLabProps {
   onEndGame: (score: number, maxScore: number) => void;
   isActive: boolean;
 }
 
+// Calculate time bonus for logic puzzles
+// Faster answers = more points (25-50 base since it's self-graded)
+const calculateTimeBonus = (secondsToAnswer: number): number => {
+  if (secondsToAnswer <= 30) return 50;      // Lightning fast: full points
+  if (secondsToAnswer <= 60) return 45;      // Very fast
+  if (secondsToAnswer <= 90) return 40;      // Fast
+  if (secondsToAnswer <= 120) return 35;     // Normal
+  return 25;                                  // Slow but correct
+};
+
 const LogicLab: React.FC<LogicLabProps> = ({ onEndGame, isActive }) => {
   const [puzzle, setPuzzle] = useState<LogicPuzzle | null>(null);
   const [answer, setAnswer] = useState('');
   const [loading, setLoading] = useState(true);
   const [isRevealed, setIsRevealed] = useState(false);
+  const [earnedPoints, setEarnedPoints] = useState<number | null>(null);
+  const puzzleStartTime = useRef<number>(Date.now());
+  const revealTime = useRef<number>(Date.now());
+  const { getElapsedTime } = useGameTiming();
 
   useEffect(() => {
     if (isActive && !puzzle) {
@@ -25,11 +40,25 @@ const LogicLab: React.FC<LogicLabProps> = ({ onEndGame, isActive }) => {
     const data = await generateLogicPuzzle();
     setPuzzle(data);
     setLoading(false);
+    puzzleStartTime.current = Date.now();
+  };
+
+  const handleReveal = () => {
+    setIsRevealed(true);
+    revealTime.current = Date.now();
   };
 
   const handleSelfGrade = (correct: boolean) => {
-    // Logic puzzles are hard to regex match perfectly, so we use honor system or self-grading
-    onEndGame(correct ? 50 : 0, 50);
+    if (correct) {
+      // Calculate time-based score (time from start to reveal)
+      const secondsToAnswer = (revealTime.current - puzzleStartTime.current) / 1000;
+      const score = calculateTimeBonus(secondsToAnswer);
+      setEarnedPoints(score);
+      setTimeout(() => onEndGame(score, 50), 1500);
+    } else {
+      setEarnedPoints(0);
+      setTimeout(() => onEndGame(0, 50), 1500);
+    }
   };
 
   if (loading) {
@@ -61,8 +90,8 @@ const LogicLab: React.FC<LogicLabProps> = ({ onEndGame, isActive }) => {
              placeholder="Type your reasoning here..."
              className="w-full p-4 border border-gray-200 rounded-xl focus:border-accent focus:ring-2 focus:ring-accent/20 outline-none min-h-[100px]"
            />
-           <button 
-             onClick={() => setIsRevealed(true)}
+           <button
+             onClick={handleReveal}
              className="w-full bg-accent hover:bg-violet-600 text-white font-bold py-3 rounded-xl transition-colors"
            >
              Reveal Answer & Grade Me
@@ -78,22 +107,32 @@ const LogicLab: React.FC<LogicLabProps> = ({ onEndGame, isActive }) => {
             <p className="text-lg font-medium">{puzzle.answer}</p>
           </div>
 
-          <p className="text-center font-bold text-gray-700 mb-4">Did you get it right?</p>
-          
-          <div className="grid grid-cols-2 gap-4">
-             <button 
-               onClick={() => handleSelfGrade(false)}
-               className="py-3 px-4 rounded-xl border-2 border-red-100 bg-red-50 text-red-600 font-bold hover:bg-red-100 transition-colors"
-             >
-               No, I missed it
-             </button>
-             <button 
-               onClick={() => handleSelfGrade(true)}
-               className="py-3 px-4 rounded-xl bg-green-500 text-white font-bold hover:bg-green-600 transition-colors shadow-md"
-             >
-               Yes, I'm smart!
-             </button>
-          </div>
+          {earnedPoints === null ? (
+            <>
+              <p className="text-center font-bold text-gray-700 mb-4">Did you get it right?</p>
+
+              <div className="grid grid-cols-2 gap-4">
+                 <button
+                   onClick={() => handleSelfGrade(false)}
+                   className="py-3 px-4 rounded-xl border-2 border-red-100 bg-red-50 text-red-600 font-bold hover:bg-red-100 transition-colors"
+                 >
+                   No, I missed it
+                 </button>
+                 <button
+                   onClick={() => handleSelfGrade(true)}
+                   className="py-3 px-4 rounded-xl bg-green-500 text-white font-bold hover:bg-green-600 transition-colors shadow-md"
+                 >
+                   Yes, I'm smart!
+                 </button>
+              </div>
+            </>
+          ) : (
+            <div className="flex items-center justify-center p-3 bg-green-50 text-green-700 rounded-xl animate-in fade-in">
+              <Zap className="w-5 h-5 mr-2" />
+              <span className="font-bold">+{earnedPoints} points!</span>
+              {earnedPoints >= 45 && <span className="ml-2 text-sm opacity-75">Speed bonus!</span>}
+            </div>
+          )}
         </div>
       )}
     </div>

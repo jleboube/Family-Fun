@@ -1,12 +1,23 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { generateEmojiChallenge } from '../../services/geminiService';
 import { EmojiChallenge } from '../../types';
-import { Loader2, Lightbulb, Clapperboard } from 'lucide-react';
+import { Loader2, Lightbulb, Clapperboard, Zap } from 'lucide-react';
+import { useGameTiming } from '../GameShell';
 
 interface EmojiGuesserProps {
   onEndGame: (score: number, maxScore: number) => void;
   isActive: boolean;
 }
+
+// Calculate time bonus for emoji guessing
+// Faster answers = more points (50-100 base, with hint penalty)
+const calculateTimeBonus = (secondsToAnswer: number): number => {
+  if (secondsToAnswer <= 10) return 100;     // Lightning fast: full points
+  if (secondsToAnswer <= 20) return 85;      // Very fast
+  if (secondsToAnswer <= 30) return 70;      // Fast
+  if (secondsToAnswer <= 45) return 55;      // Normal
+  return 40;                                  // Slow but correct
+};
 
 const EmojiGuesser: React.FC<EmojiGuesserProps> = ({ onEndGame, isActive }) => {
   const [data, setData] = useState<EmojiChallenge | null>(null);
@@ -15,6 +26,9 @@ const EmojiGuesser: React.FC<EmojiGuesserProps> = ({ onEndGame, isActive }) => {
   const [showHint, setShowHint] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [isCorrect, setIsCorrect] = useState(false);
+  const [lastPoints, setLastPoints] = useState<number | null>(null);
+  const puzzleStartTime = useRef<number>(Date.now());
+  const { getElapsedTime } = useGameTiming();
 
   useEffect(() => {
     if (isActive && !data) {
@@ -27,6 +41,7 @@ const EmojiGuesser: React.FC<EmojiGuesserProps> = ({ onEndGame, isActive }) => {
     const result = await generateEmojiChallenge();
     setData(result);
     setLoading(false);
+    puzzleStartTime.current = Date.now();
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -34,17 +49,23 @@ const EmojiGuesser: React.FC<EmojiGuesserProps> = ({ onEndGame, isActive }) => {
     if (!data || submitted) return;
 
     setSubmitted(true);
-    
+
     // Loose matching logic
     const normalizedGuess = guess.toLowerCase().replace(/[^a-z0-9]/g, '');
     const normalizedAnswer = data.phrase.toLowerCase().replace(/[^a-z0-9]/g, '');
 
     if (normalizedGuess === normalizedAnswer) {
       setIsCorrect(true);
-      const score = showHint ? 80 : 100;
+      // Calculate time-based score
+      const secondsToAnswer = (Date.now() - puzzleStartTime.current) / 1000;
+      let score = calculateTimeBonus(secondsToAnswer);
+      // Apply hint penalty (-20 points)
+      if (showHint) score = Math.max(20, score - 20);
+      setLastPoints(score);
       setTimeout(() => onEndGame(score, 100), 2500);
     } else {
       setIsCorrect(false);
+      setLastPoints(0);
       setTimeout(() => onEndGame(0, 100), 3500);
     }
   };
@@ -86,14 +107,22 @@ const EmojiGuesser: React.FC<EmojiGuesserProps> = ({ onEndGame, isActive }) => {
             }`}
           autoFocus
         />
-        <button 
-          type="submit" 
+        <button
+          type="submit"
           disabled={guess.length === 0 || submitted}
           className="w-full bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-3 rounded-xl transition-colors disabled:opacity-50"
         >
           {submitted ? (isCorrect ? 'CORRECT!' : 'WRONG!') : 'GUESS'}
         </button>
       </form>
+
+      {submitted && isCorrect && lastPoints !== null && (
+        <div className="mt-4 flex items-center justify-center p-3 bg-green-50 text-green-700 rounded-xl animate-in fade-in">
+          <Zap className="w-5 h-5 mr-2" />
+          <span className="font-bold">+{lastPoints} points!</span>
+          {lastPoints >= 85 && <span className="ml-2 text-sm opacity-75">Speed bonus!</span>}
+        </div>
+      )}
 
       {submitted && !isCorrect && (
          <div className="mt-4 text-red-500 font-medium">

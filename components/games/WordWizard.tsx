@@ -1,12 +1,23 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { generateWordChallenge } from '../../services/geminiService';
 import { WordChallenge } from '../../types';
-import { Loader2, Lightbulb } from 'lucide-react';
+import { Loader2, Lightbulb, Zap } from 'lucide-react';
+import { useGameTiming } from '../GameShell';
 
 interface WordWizardProps {
   onEndGame: (score: number, maxScore: number) => void;
   isActive: boolean;
 }
+
+// Calculate time bonus for word guessing
+// Base score depends on speed, with penalties for attempts and hints
+const calculateTimeBonus = (secondsToAnswer: number): number => {
+  if (secondsToAnswer <= 15) return 100;     // Lightning fast: full points
+  if (secondsToAnswer <= 30) return 85;      // Very fast
+  if (secondsToAnswer <= 45) return 70;      // Fast
+  if (secondsToAnswer <= 60) return 55;      // Normal
+  return 40;                                  // Slow but correct
+};
 
 const WordWizard: React.FC<WordWizardProps> = ({ onEndGame, isActive }) => {
   const [data, setData] = useState<WordChallenge | null>(null);
@@ -16,6 +27,9 @@ const WordWizard: React.FC<WordWizardProps> = ({ onEndGame, isActive }) => {
   const [message, setMessage] = useState('');
   const [gameWon, setGameWon] = useState(false);
   const [showHint, setShowHint] = useState(false);
+  const [lastPoints, setLastPoints] = useState<number | null>(null);
+  const puzzleStartTime = useRef<number>(Date.now());
+  const { getElapsedTime } = useGameTiming();
 
   useEffect(() => {
     if (isActive && !data) {
@@ -30,6 +44,7 @@ const WordWizard: React.FC<WordWizardProps> = ({ onEndGame, isActive }) => {
     result.word = result.word.trim().toUpperCase();
     setData(result);
     setLoading(false);
+    puzzleStartTime.current = Date.now();
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -42,8 +57,16 @@ const WordWizard: React.FC<WordWizardProps> = ({ onEndGame, isActive }) => {
     if (userGuess === data.word) {
       setGameWon(true);
       setMessage('CORRECT! You are a genius!');
-      // Score calculation: Base 100, minus 10 per wrong attempt. Min 10.
-      const calcScore = Math.max(10, 100 - (attempts * 10) - (showHint ? 20 : 0));
+      // Calculate time-based score with penalties
+      const secondsToAnswer = (Date.now() - puzzleStartTime.current) / 1000;
+      let calcScore = calculateTimeBonus(secondsToAnswer);
+      // Apply attempt penalty (-10 per wrong attempt)
+      calcScore = calcScore - (attempts * 10);
+      // Apply hint penalty (-20 points)
+      if (showHint) calcScore -= 20;
+      // Minimum 10 points for a correct answer
+      calcScore = Math.max(10, calcScore);
+      setLastPoints(calcScore);
       setTimeout(() => onEndGame(calcScore, 100), 2000);
     } else {
       setMessage('Not quite. Try again!');
@@ -100,6 +123,14 @@ const WordWizard: React.FC<WordWizardProps> = ({ onEndGame, isActive }) => {
       </form>
 
       {message && <p className={`mt-4 font-bold ${gameWon ? 'text-green-600' : 'text-red-500'}`}>{message}</p>}
+
+      {gameWon && lastPoints !== null && (
+        <div className="mt-3 flex items-center justify-center p-3 bg-green-50 text-green-700 rounded-xl animate-in fade-in">
+          <Zap className="w-5 h-5 mr-2" />
+          <span className="font-bold">+{lastPoints} points!</span>
+          {lastPoints >= 70 && <span className="ml-2 text-sm opacity-75">Speed bonus!</span>}
+        </div>
+      )}
 
       {!gameWon && !showHint && (
         <button 

@@ -52,7 +52,7 @@ export const registerUser = (username: string, isAdmin: boolean = false): User =
     username,
     avatar: generateAvatar(username),
     role: isAdmin ? 'admin' : 'user',
-    coins: 50, // Start with 50 coins as a welcome bonus
+    coins: 0, // Start with 0 coins - earn them by playing!
     createdAt: Date.now(),
   };
   saveUser(newUser);
@@ -85,7 +85,7 @@ export const registerGoogleUser = (googleId: string, email: string, name: string
     username: name || email.split('@')[0],
     avatar: picture || generateAvatar(email),
     role: 'user',
-    coins: 50,
+    coins: 0, // Start with 0 coins - earn them by playing!
     createdAt: Date.now(),
     email,
     googleId,
