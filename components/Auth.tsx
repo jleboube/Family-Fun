@@ -76,7 +76,8 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
   const [isGoogleLoading, setIsGoogleLoading] = useState(true);
   const googleButtonRef = useRef<HTMLDivElement>(null);
 
-  const googleClientId = (typeof process !== 'undefined' && process.env?.GOOGLE_CLIENT_ID) || '';
+  // @ts-ignore - Vite replaces process.env.GOOGLE_CLIENT_ID at build time
+  const googleClientId: string = process.env.GOOGLE_CLIENT_ID || '';
 
   useEffect(() => {
     // Load Google Identity Services script
