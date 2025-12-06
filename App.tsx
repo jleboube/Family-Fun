@@ -12,7 +12,7 @@ import MathMan from './components/games/MathMan';
 import AdminPanel from './components/AdminPanel';
 import LandingPage from './components/LandingPage'; // Import LandingPage
 import { User, GameType } from './types';
-import { getCurrentUser, logoutUser, saveScore, addCoins } from './services/storageService';
+import { getCurrentUser, logoutUser, saveScore, addCoins, migrateUserCoins } from './services/storageService';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -21,6 +21,9 @@ const App: React.FC = () => {
   const [cheatedInSession, setCheatedInSession] = useState(false);
 
   useEffect(() => {
+    // Run migration to reset fake starting coins for existing users
+    migrateUserCoins();
+
     const loaded = getCurrentUser();
     if (loaded) {
       setUser(loaded);

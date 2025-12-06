@@ -203,4 +203,46 @@ export const clearAllData = () => {
     localStorage.removeItem(USERS_KEY);
     localStorage.removeItem(SCORES_KEY);
     localStorage.removeItem(SESSION_KEY);
-}
+};
+
+// Migration: Reset all users' coins to match their actual earned scores
+// This ensures existing users don't have fake starting coins
+const MIGRATION_KEY = 'family_game_migration_v1';
+
+export const migrateUserCoins = (): void => {
+  // Only run migration once
+  if (localStorage.getItem(MIGRATION_KEY)) return;
+
+  const users = getUsers();
+  const scores = getScores();
+
+  users.forEach(user => {
+    // Calculate total score earned by this user from game scores
+    const userScores = scores.filter(s => s.userId === user.id);
+    const earnedCoins = userScores.reduce((total, s) => total + s.score, 0);
+
+    // Reset coins to earned amount (not fake starting balance)
+    user.coins = earnedCoins;
+
+    // Update in storage
+    const allUsers = getUsers();
+    const idx = allUsers.findIndex(u => u.id === user.id);
+    if (idx >= 0) {
+      allUsers[idx] = user;
+      localStorage.setItem(USERS_KEY, JSON.stringify(allUsers));
+    }
+  });
+
+  // Update current session if logged in
+  const currentUser = getCurrentUser();
+  if (currentUser) {
+    const updatedUsers = getUsers();
+    const updated = updatedUsers.find(u => u.id === currentUser.id);
+    if (updated) {
+      localStorage.setItem(SESSION_KEY, JSON.stringify(updated));
+    }
+  }
+
+  // Mark migration as complete
+  localStorage.setItem(MIGRATION_KEY, 'true');
+};
