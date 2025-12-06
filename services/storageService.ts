@@ -37,9 +37,9 @@ export const loginUser = (username: string): User | null => {
   return null;
 };
 
-// Generates an avatar with specific skin tones (pale, light) as requested
+// Generates an avatar using DiceBear API
 const generateAvatar = (seed: string) => {
-  return `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&skinColor=pale,light`;
+  return `https://api.dicebear.com/9.x/avataaars/svg?seed=${encodeURIComponent(seed)}`;
 };
 
 export const registerUser = (username: string, isAdmin: boolean = false): User => {

@@ -59,7 +59,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
               <div className="flex -space-x-2">
                 {[1,2,3].map(i => (
                   <div key={i} className={`w-6 h-6 rounded-full border-2 border-white bg-gray-200 overflow-hidden`}>
-                     <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${i * 55}&skinColor=pale,light`} alt="user" />
+                     <img src={`https://api.dicebear.com/9.x/avataaars/svg?seed=user${i}`} alt="user" />
                   </div>
                 ))}
               </div>
@@ -237,7 +237,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
                  <div className="flex -space-x-4">
                     {[1,2,3,4].map(i => (
                       <div key={i} className="w-16 h-16 rounded-full border-4 border-gray-900 bg-gray-800 overflow-hidden transform hover:-translate-y-2 transition-transform">
-                         <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=fam${i}&skinColor=pale,light`} alt="fam" />
+                         <img src={`https://api.dicebear.com/9.x/avataaars/svg?seed=family${i}`} alt="fam" />
                       </div>
                     ))}
                  </div>
@@ -295,7 +295,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
                 <p className="text-gray-600 italic mb-6 text-lg">"{review.text}"</p>
                 <div className="flex items-center">
                    <div className="w-10 h-10 rounded-full bg-gray-200 mr-3 overflow-hidden">
-                      <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${review.author}&skinColor=pale,light`} />
+                      <img src={`https://api.dicebear.com/9.x/avataaars/svg?seed=${review.author}`} alt={review.author} />
                    </div>
                    <div>
                       <p className="font-bold text-gray-900">{review.author}</p>
