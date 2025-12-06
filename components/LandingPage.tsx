@@ -369,7 +369,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
                <span className="font-bold text-gray-900">FamilyFun</span>
             </div>
             <div className="text-sm text-gray-500">
-               © {new Date().getFullYear()} FamilyFun App. Built with Gemini AI.
+               © {new Date().getFullYear()} FamilyFun App. Built by Joe LeBoube.
             </div>
             <div className="flex space-x-6 mt-4 md:mt-0">
                <button onClick={() => setActiveModal('privacy')} className="text-gray-400 hover:text-gray-900">Privacy</button>
