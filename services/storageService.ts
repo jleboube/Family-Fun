@@ -1,8 +1,19 @@
-import { User, GameScore, GameType } from '../types';
+import { User, GameScore, GameType, Group } from '../types';
 
 const USERS_KEY = 'family_game_users';
 const SCORES_KEY = 'family_game_scores';
 const SESSION_KEY = 'family_game_session';
+const GROUPS_KEY = 'family_game_groups';
+
+// Admin email from environment (baked in at build time)
+// @ts-ignore - Vite replaces process.env.ADMIN_EMAIL at build time
+const ADMIN_EMAIL: string = process.env.ADMIN_EMAIL || '';
+
+// Check if an email should be granted admin privileges
+export const isAdminEmail = (email: string): boolean => {
+  if (!ADMIN_EMAIL || !email) return false;
+  return email.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+};
 
 export const getUsers = (): User[] => {
   const data = localStorage.getItem(USERS_KEY);
@@ -66,6 +77,11 @@ export const registerGoogleUser = (googleId: string, email: string, name: string
   // Check if user already exists by googleId or email
   const existingByGoogleId = users.find(u => u.googleId === googleId);
   if (existingByGoogleId) {
+    // Update to admin if email matches admin email and they're not already admin
+    if (isAdminEmail(email) && existingByGoogleId.role !== 'admin') {
+      existingByGoogleId.role = 'admin';
+      saveUser(existingByGoogleId);
+    }
     localStorage.setItem(SESSION_KEY, JSON.stringify(existingByGoogleId));
     return existingByGoogleId;
   }
@@ -75,6 +91,8 @@ export const registerGoogleUser = (googleId: string, email: string, name: string
     // Link Google account to existing user
     existingByEmail.googleId = googleId;
     if (picture) existingByEmail.avatar = picture;
+    // Update to admin if email matches admin email
+    if (isAdminEmail(email)) existingByEmail.role = 'admin';
     saveUser(existingByEmail);
     localStorage.setItem(SESSION_KEY, JSON.stringify(existingByEmail));
     return existingByEmail;
@@ -84,7 +102,7 @@ export const registerGoogleUser = (googleId: string, email: string, name: string
     id: crypto.randomUUID(),
     username: name || email.split('@')[0],
     avatar: picture || generateAvatar(email),
-    role: 'user',
+    role: isAdminEmail(email) ? 'admin' : 'user', // Auto-admin if email matches
     coins: 0, // Start with 0 coins - earn them by playing!
     createdAt: Date.now(),
     email,
@@ -204,6 +222,215 @@ export const clearAllData = () => {
     localStorage.removeItem(SCORES_KEY);
     localStorage.removeItem(SESSION_KEY);
 };
+
+// ==================== GROUP/FAMILY MANAGEMENT ====================
+
+// Generate a unique 6-character invite code
+const generateInviteCode = (): string => {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Exclude confusing chars (0, O, 1, I)
+  let code = '';
+  for (let i = 0; i < 6; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  // Ensure uniqueness
+  const groups = getGroups();
+  if (groups.some(g => g.inviteCode === code)) {
+    return generateInviteCode(); // Recursively generate new code if collision
+  }
+  return code;
+};
+
+export const getGroups = (): Group[] => {
+  const data = localStorage.getItem(GROUPS_KEY);
+  return data ? JSON.parse(data) : [];
+};
+
+export const getGroupById = (groupId: string): Group | null => {
+  const groups = getGroups();
+  return groups.find(g => g.id === groupId) || null;
+};
+
+export const getGroupByInviteCode = (inviteCode: string): Group | null => {
+  const groups = getGroups();
+  return groups.find(g => g.inviteCode.toUpperCase() === inviteCode.toUpperCase()) || null;
+};
+
+export const createGroup = (name: string, creatorId: string): Group => {
+  const groups = getGroups();
+
+  const newGroup: Group = {
+    id: crypto.randomUUID(),
+    name,
+    inviteCode: generateInviteCode(),
+    createdBy: creatorId,
+    createdAt: Date.now(),
+    memberIds: [creatorId],
+  };
+
+  groups.push(newGroup);
+  localStorage.setItem(GROUPS_KEY, JSON.stringify(groups));
+
+  // Update the creator's groupId
+  const users = getUsers();
+  const creator = users.find(u => u.id === creatorId);
+  if (creator) {
+    creator.groupId = newGroup.id;
+    saveUser(creator);
+  }
+
+  return newGroup;
+};
+
+export const joinGroup = (userId: string, inviteCode: string): { success: boolean; group?: Group; error?: string } => {
+  const group = getGroupByInviteCode(inviteCode);
+  if (!group) {
+    return { success: false, error: 'Invalid invite code' };
+  }
+
+  // Check if user is already in this group
+  if (group.memberIds.includes(userId)) {
+    return { success: false, error: 'You are already a member of this group' };
+  }
+
+  // Check if user is already in another group
+  const users = getUsers();
+  const user = users.find(u => u.id === userId);
+  if (user?.groupId) {
+    return { success: false, error: 'You are already in a group. Leave your current group first.' };
+  }
+
+  // Add user to group
+  const groups = getGroups();
+  const groupIndex = groups.findIndex(g => g.id === group.id);
+  if (groupIndex >= 0) {
+    groups[groupIndex].memberIds.push(userId);
+    localStorage.setItem(GROUPS_KEY, JSON.stringify(groups));
+  }
+
+  // Update user's groupId
+  if (user) {
+    user.groupId = group.id;
+    saveUser(user);
+  }
+
+  return { success: true, group };
+};
+
+export const leaveGroup = (userId: string): { success: boolean; error?: string } => {
+  const users = getUsers();
+  const user = users.find(u => u.id === userId);
+
+  if (!user?.groupId) {
+    return { success: false, error: 'You are not in a group' };
+  }
+
+  const groups = getGroups();
+  const groupIndex = groups.findIndex(g => g.id === user.groupId);
+
+  if (groupIndex >= 0) {
+    // Remove user from group
+    groups[groupIndex].memberIds = groups[groupIndex].memberIds.filter(id => id !== userId);
+
+    // If group is empty, delete it
+    if (groups[groupIndex].memberIds.length === 0) {
+      groups.splice(groupIndex, 1);
+    }
+
+    localStorage.setItem(GROUPS_KEY, JSON.stringify(groups));
+  }
+
+  // Clear user's groupId
+  user.groupId = undefined;
+  saveUser(user);
+
+  return { success: true };
+};
+
+export const deleteGroup = (groupId: string): { success: boolean; error?: string } => {
+  const groups = getGroups();
+  const groupIndex = groups.findIndex(g => g.id === groupId);
+
+  if (groupIndex < 0) {
+    return { success: false, error: 'Group not found' };
+  }
+
+  const group = groups[groupIndex];
+
+  // Remove groupId from all members
+  const users = getUsers();
+  group.memberIds.forEach(memberId => {
+    const member = users.find(u => u.id === memberId);
+    if (member) {
+      member.groupId = undefined;
+      saveUser(member);
+    }
+  });
+
+  // Delete the group
+  groups.splice(groupIndex, 1);
+  localStorage.setItem(GROUPS_KEY, JSON.stringify(groups));
+
+  return { success: true };
+};
+
+export const updateGroupName = (groupId: string, newName: string): { success: boolean; error?: string } => {
+  const groups = getGroups();
+  const groupIndex = groups.findIndex(g => g.id === groupId);
+
+  if (groupIndex < 0) {
+    return { success: false, error: 'Group not found' };
+  }
+
+  groups[groupIndex].name = newName;
+  localStorage.setItem(GROUPS_KEY, JSON.stringify(groups));
+
+  return { success: true };
+};
+
+export const regenerateInviteCode = (groupId: string): { success: boolean; newCode?: string; error?: string } => {
+  const groups = getGroups();
+  const groupIndex = groups.findIndex(g => g.id === groupId);
+
+  if (groupIndex < 0) {
+    return { success: false, error: 'Group not found' };
+  }
+
+  const newCode = generateInviteCode();
+  groups[groupIndex].inviteCode = newCode;
+  localStorage.setItem(GROUPS_KEY, JSON.stringify(groups));
+
+  return { success: true, newCode };
+};
+
+export const getGroupMembers = (groupId: string): User[] => {
+  const group = getGroupById(groupId);
+  if (!group) return [];
+
+  const users = getUsers();
+  return users.filter(u => group.memberIds.includes(u.id));
+};
+
+export const getGroupLeaderboard = (groupId: string) => {
+  const members = getGroupMembers(groupId);
+  const scores = getScores();
+
+  return members.map(member => {
+    const memberScores = scores.filter(s => s.userId === member.id);
+    const totalScore = memberScores.reduce((sum, s) => sum + s.score, 0);
+    const gamesPlayed = memberScores.length;
+    const cheaterCount = memberScores.filter(s => s.cheated).length;
+
+    return {
+      user: member,
+      totalScore,
+      gamesPlayed,
+      cheaterCount,
+      streak: calculateStreak(member.id),
+    };
+  }).sort((a, b) => b.totalScore - a.totalScore);
+};
+
+// ==================== DATA MIGRATION ====================
 
 // Migration: Reset all users' coins to match their actual earned scores
 // This ensures existing users don't have fake starting coins

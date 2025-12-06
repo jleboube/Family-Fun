@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { loginUser, registerUser, registerGoogleUser } from '../services/storageService';
-import { User } from '../types';
-import { Gamepad2, AlertCircle } from 'lucide-react';
+import { loginUser, registerUser, registerGoogleUser, getUsers, getGroups, joinGroup, createGroup, getGroupById } from '../services/storageService';
+import { findSimilarNames, NameSuggestion } from '../services/geminiService';
+import { User, Group } from '../types';
+import { Gamepad2, AlertCircle, Users, Sparkles, Loader2, Check, X } from 'lucide-react';
 
 // Declare google global for TypeScript
 declare global {
@@ -76,6 +77,17 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
   const [isGoogleLoading, setIsGoogleLoading] = useState(true);
   const googleButtonRef = useRef<HTMLDivElement>(null);
 
+  // Group joining state
+  const [showGroupOptions, setShowGroupOptions] = useState(false);
+  const [inviteCode, setInviteCode] = useState('');
+  const [newGroupName, setNewGroupName] = useState('');
+  const [groupError, setGroupError] = useState('');
+  const [pendingUser, setPendingUser] = useState<User | null>(null);
+
+  // AI suggestions state
+  const [aiSuggestions, setAiSuggestions] = useState<NameSuggestion[]>([]);
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
+
   // @ts-ignore - Vite replaces process.env.GOOGLE_CLIENT_ID at build time
   const googleClientId: string = process.env.GOOGLE_CLIENT_ID || '';
 
@@ -131,7 +143,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
     }
   };
 
-  const handleGoogleCallback = (response: GoogleCredentialResponse) => {
+  const handleGoogleCallback = async (response: GoogleCredentialResponse) => {
     const decoded = decodeJWT(response.credential);
     if (decoded) {
       const user = registerGoogleUser(
@@ -140,13 +152,46 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
         decoded.name,
         decoded.picture
       );
-      onLogin(user);
+
+      // If user doesn't have a group, show group options
+      if (!user.groupId) {
+        setPendingUser(user);
+        setShowGroupOptions(true);
+        await checkForSimilarNames(decoded.name);
+      } else {
+        onLogin(user);
+      }
     } else {
       setGoogleError('Failed to process Google Sign-In');
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const checkForSimilarNames = async (userName: string) => {
+    setIsLoadingSuggestions(true);
+    try {
+      const users = getUsers();
+      const groups = getGroups();
+
+      // Build user list with group info
+      const usersWithGroups = users.map(u => {
+        const group = u.groupId ? getGroupById(u.groupId) : null;
+        return {
+          id: u.id,
+          username: u.username,
+          groupId: u.groupId,
+          groupName: group?.name
+        };
+      });
+
+      const suggestions = await findSimilarNames(userName, usersWithGroups);
+      setAiSuggestions(suggestions);
+    } catch (err) {
+      console.error('Failed to get AI suggestions:', err);
+    }
+    setIsLoadingSuggestions(false);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!username.trim()) return;
 
@@ -154,7 +199,9 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
 
     if (isRegister) {
       const user = registerUser(username, false);
-      onLogin(user);
+      setPendingUser(user);
+      setShowGroupOptions(true);
+      await checkForSimilarNames(username);
     } else {
       const user = loginUser(username);
       if (user) {
@@ -165,6 +212,163 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
     }
   };
 
+  const handleJoinGroup = () => {
+    if (!pendingUser || !inviteCode.trim()) return;
+
+    const result = joinGroup(pendingUser.id, inviteCode.trim().toUpperCase());
+    if (result.success) {
+      // Refresh user data
+      const updatedUser = { ...pendingUser, groupId: result.group!.id };
+      onLogin(updatedUser);
+    } else {
+      setGroupError(result.error || 'Failed to join group');
+    }
+  };
+
+  const handleCreateGroup = () => {
+    if (!pendingUser || !newGroupName.trim()) return;
+
+    const group = createGroup(newGroupName.trim(), pendingUser.id);
+    const updatedUser = { ...pendingUser, groupId: group.id };
+    onLogin(updatedUser);
+  };
+
+  const handleJoinSuggestedGroup = (groupId: string) => {
+    if (!pendingUser) return;
+
+    const group = getGroupById(groupId);
+    if (group) {
+      const result = joinGroup(pendingUser.id, group.inviteCode);
+      if (result.success) {
+        const updatedUser = { ...pendingUser, groupId: group.id };
+        onLogin(updatedUser);
+      } else {
+        setGroupError(result.error || 'Failed to join group');
+      }
+    }
+  };
+
+  const handleSkipGroup = () => {
+    if (pendingUser) {
+      onLogin(pendingUser);
+    }
+  };
+
+  // Show group options screen
+  if (showGroupOptions && pendingUser) {
+    const suggestedGroups = aiSuggestions
+      .filter(s => s.groupId)
+      .reduce((acc, s) => {
+        if (!acc.find(g => g.groupId === s.groupId)) {
+          acc.push(s);
+        }
+        return acc;
+      }, [] as NameSuggestion[]);
+
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
+        <div className="bg-white p-8 rounded-3xl shadow-xl w-full max-w-md">
+          <div className="flex justify-center mb-6">
+            <div className="bg-indigo-100 p-4 rounded-full">
+              <Users size={48} className="text-indigo-600" />
+            </div>
+          </div>
+
+          <h2 className="text-2xl font-extrabold text-center text-gray-900 mb-2">
+            Join a Family Group
+          </h2>
+          <p className="text-center text-gray-500 mb-6">
+            Welcome, <span className="font-bold">{pendingUser.username}</span>! Join or create a group to compete with family.
+          </p>
+
+          {/* AI Suggestions */}
+          {isLoadingSuggestions && (
+            <div className="flex items-center justify-center p-4 mb-6 bg-indigo-50 rounded-xl">
+              <Loader2 className="w-5 h-5 animate-spin text-indigo-600 mr-2" />
+              <span className="text-indigo-700 text-sm">Looking for family members...</span>
+            </div>
+          )}
+
+          {!isLoadingSuggestions && suggestedGroups.length > 0 && (
+            <div className="mb-6 p-4 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl border border-indigo-100">
+              <div className="flex items-center mb-3">
+                <Sparkles className="w-5 h-5 text-indigo-600 mr-2" />
+                <span className="font-bold text-indigo-900">AI Found Possible Family!</span>
+              </div>
+              <div className="space-y-2">
+                {suggestedGroups.map((suggestion, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => handleJoinSuggestedGroup(suggestion.groupId!)}
+                    className="w-full flex items-center justify-between p-3 bg-white rounded-lg hover:bg-indigo-50 transition-colors border border-indigo-100"
+                  >
+                    <div className="text-left">
+                      <p className="font-bold text-gray-900">{suggestion.groupName}</p>
+                      <p className="text-xs text-gray-500">{suggestion.reason}</p>
+                    </div>
+                    <Check className="w-5 h-5 text-indigo-600" />
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Join with Code */}
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Have an invite code?</label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={inviteCode}
+                onChange={(e) => { setInviteCode(e.target.value.toUpperCase()); setGroupError(''); }}
+                placeholder="ABCD12"
+                maxLength={6}
+                className="flex-1 px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none font-mono text-lg tracking-widest uppercase"
+              />
+              <button
+                onClick={handleJoinGroup}
+                disabled={inviteCode.length !== 6}
+                className="px-4 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed font-bold"
+              >
+                Join
+              </button>
+            </div>
+            {groupError && <p className="text-red-500 text-sm mt-2">{groupError}</p>}
+          </div>
+
+          {/* Create New Group */}
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Or create a new family group</label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={newGroupName}
+                onChange={(e) => setNewGroupName(e.target.value)}
+                placeholder="The Smiths"
+                className="flex-1 px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
+              />
+              <button
+                onClick={handleCreateGroup}
+                disabled={!newGroupName.trim()}
+                className="px-4 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-bold"
+              >
+                Create
+              </button>
+            </div>
+          </div>
+
+          {/* Skip */}
+          <button
+            onClick={handleSkipGroup}
+            className="w-full py-3 text-gray-500 hover:text-gray-700 text-sm font-medium transition-colors"
+          >
+            Skip for now - I'll join later
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
       <div className="bg-white p-8 rounded-3xl shadow-xl w-full max-w-md">
@@ -173,7 +377,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
             <Gamepad2 size={48} className="text-primary" />
           </div>
         </div>
-        
+
         <h2 className="text-3xl font-extrabold text-center text-gray-900 mb-2">
           {isRegister ? 'Join the Family' : 'Welcome Back'}
         </h2>

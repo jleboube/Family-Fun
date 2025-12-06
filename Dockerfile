@@ -12,11 +12,13 @@ RUN npm ci
 # Copy source code
 COPY . .
 
-# Build arguments for API keys
+# Build arguments for API keys and config
 ARG GEMINI_API_KEY
 ARG GOOGLE_CLIENT_ID
+ARG ADMIN_EMAIL
 ENV GEMINI_API_KEY=$GEMINI_API_KEY
 ENV GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID
+ENV ADMIN_EMAIL=$ADMIN_EMAIL
 
 # Build the application
 RUN npm run build

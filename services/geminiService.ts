@@ -165,7 +165,7 @@ export const generateEmojiChallenge = async (): Promise<EmojiChallenge> => {
 
 export const generateMathProblem = async (): Promise<MathProblem[]> => {
   const ai = getAiClient();
-  const prompt = `Generate 3 math problems. 
+  const prompt = `Generate 3 math problems.
   1. Easy (Basic arithmetic).
   2. Medium (Pre-algebra or sequence).
   3. Hard (Logic based math word problem).
@@ -200,5 +200,79 @@ export const generateMathProblem = async (): Promise<MathProblem[]> => {
       { question: "Solve for x: 2x - 4 = 10", answer: 7, difficulty: "medium" },
       { question: "If a train travels 60mph for 2.5 hours, how many miles did it go?", answer: 150, difficulty: "hard" }
     ];
+  }
+};
+
+// AI-powered name similarity detection for group suggestions
+export interface NameSuggestion {
+  userId: string;
+  username: string;
+  groupId?: string;
+  groupName?: string;
+  similarity: 'high' | 'medium' | 'low';
+  reason: string;
+}
+
+export const findSimilarNames = async (
+  newUserName: string,
+  existingUsers: Array<{ id: string; username: string; groupId?: string; groupName?: string }>
+): Promise<NameSuggestion[]> => {
+  if (existingUsers.length === 0) return [];
+
+  const ai = getAiClient();
+  const usersJson = existingUsers.map(u => ({
+    id: u.id,
+    username: u.username,
+    groupId: u.groupId || null,
+    groupName: u.groupName || null
+  }));
+
+  const prompt = `You are analyzing names for a family game app to suggest if a new user might be related to existing users.
+
+New user's name: "${newUserName}"
+
+Existing users:
+${JSON.stringify(usersJson, null, 2)}
+
+Analyze if the new user might be related to any existing users based on:
+1. Same last name (e.g., "John Smith" and "Jane Smith")
+2. Similar name patterns (e.g., "Dad" and "Mom", or nicknames)
+3. Family relationship indicators in names (e.g., "GrandmaJane" and "GrandpaJim")
+
+Only return users with meaningful similarity. Don't force matches - if there's no reasonable connection, return empty array.
+For each match, provide a brief reason why they might be related.`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              userId: { type: Type.STRING },
+              username: { type: Type.STRING },
+              groupId: { type: Type.STRING },
+              groupName: { type: Type.STRING },
+              similarity: { type: Type.STRING },
+              reason: { type: Type.STRING }
+            },
+            required: ['userId', 'username', 'similarity', 'reason']
+          }
+        }
+      }
+    });
+
+    const text = response.text;
+    if (!text) return [];
+
+    const suggestions = JSON.parse(text) as NameSuggestion[];
+    return suggestions.filter(s => s.similarity === 'high' || s.similarity === 'medium');
+  } catch (error) {
+    console.error("Gemini Name Matching Error:", error);
+    return [];
   }
 };

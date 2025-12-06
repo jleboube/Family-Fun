@@ -16,6 +16,16 @@ export interface User {
   createdAt: number;
   email?: string;
   googleId?: string;
+  groupId?: string; // ID of the group/family they belong to
+}
+
+export interface Group {
+  id: string;
+  name: string;
+  inviteCode: string; // Unique 6-character code for joining
+  createdBy: string; // User ID of creator
+  createdAt: number;
+  memberIds: string[]; // Array of user IDs
 }
 
 export interface GameScore {
