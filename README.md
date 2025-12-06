@@ -24,19 +24,19 @@ A fun, family-friendly trivia and brain game app powered by AI. Challenge your f
 
 Family Fun Trivia Landing Page
 
-![Alt text](docs/ff-1.png "Family Fun Trivia Landing Page")
+![Alt text](docs/ff1.png "Family Fun Trivia Landing Page")
 
-![Alt text](docs/ff-2.png "Family Fun Trivia Landing Page")
+![Alt text](docs/ff2.png "Family Fun Trivia Landing Page")
 
-![Alt text](docs/ff-3.png "Family Fun Trivia Landing Page")
+![Alt text](docs/ff3.png "Family Fun Trivia Landing Page")
 
-![Alt text](docs/ff-4.png "Family Fun Trivia Landing Page")
+![Alt text](docs/ff4.png "Family Fun Trivia Landing Page")
 
-![Alt text](docs/ff-5.png "Family Fun Trivia Landing Page")
+![Alt text](docs/ff5.png "Family Fun Trivia Landing Page")
 
-![Alt text](docs/ff-6.png "Family Fun Trivia Landing Page")
+![Alt text](docs/ff6.png "Family Fun Trivia Landing Page")
 
-![Alt text](docs/ff-7.png "Family Fun Trivia Landing Page")
+![Alt text](docs/ff7.png "Family Fun Trivia Landing Page")
 
 
 ## Features
